@@ -6,6 +6,8 @@ set(CMAKE_CXX_STANDARD 17)
 # Ustawiamy ścieżkę do vendora
 set(VENDOR_DIR "${CMAKE_SOURCE_DIR}/vendor")
 
+include_directories("${CMAKE_SOURCE_DIR}/src")
+
 # ==========================================
 # 1. BIBLIOTEKI "HEADER-ONLY" I ŹRÓDŁOWE
 # (Te ładujemy zawsze z vendora, dla spójności)
@@ -76,3 +78,10 @@ else()
     # Linkujemy na Linuxie
     target_link_libraries(${PROJECT_NAME} glfw GL dl)
 endif()
+
+# --- AUTOMATYCZNE KOPIOWANIE ZASOBÓW (Shadery) ---
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_SOURCE_DIR}/res"
+    "$<TARGET_FILE_DIR:${PROJECT_NAME}>/res"
+)
