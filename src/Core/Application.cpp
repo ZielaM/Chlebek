@@ -54,80 +54,78 @@ void Application::Init() {
     glEnable(GL_PROGRAM_POINT_SIZE);
     glEnable(GL_DEPTH_TEST);
 
+    m_SimEngine.Init(1000); // Stwórz 1000 cząsteczek (test)
+
     std::cout << "OpenGL Init OK! Wersja: " << glGetString(GL_VERSION) << std::endl;
 }
 
 void Application::MainLoop() {
-    // 1. Stwórz Shader
-    // Upewnij się, że ścieżka jest poprawna względem pliku .exe!
     Shader shader("res/shaders/basic.vert", "res/shaders/basic.frag");
 
-    // 2. Wygeneruj losowe agenty (punkty)
-    std::vector<float> vertices;
-    int numAgents = 1000;
-    std::mt19937 rng(std::random_device{}());
-    std::uniform_real_distribution<float> dist(-1.0f, 1.0f); // Pozycje od -1 do 1
-
-    for(int i = 0; i < numAgents; i++) {
-        vertices.push_back(dist(rng)); // X
-        vertices.push_back(dist(rng)); // Y
-        vertices.push_back(dist(rng)); // Z
-    }
-
-    // 3. Skonfiguruj bufory OpenGL (VAO i VBO)
     unsigned int VBO, VAO;
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
-
+    
+    // Konfiguracja VAO (robimy to raz)
     glBindVertexArray(VAO);
-
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), vertices.data(), GL_STATIC_DRAW);
-
-    // Mówimy OpenGL jak czytać dane: 3 floaty na wierzchołek (X, Y, Z)
+    // Rezerwujemy pamięć na starcie (DYNAMIC_DRAW bo będziemy to zmieniać co klatkę!)
+    glBufferData(GL_ARRAY_BUFFER, 1000 * 3 * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
-    // Pętla główna
-    while (!glfwWindowShouldClose(m_Window)) {
-        if (glfwGetKey(m_Window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-            glfwSetWindowShouldClose(m_Window, true);
+    float lastTime = 0.0f;
 
+    while (!glfwWindowShouldClose(m_Window)) {
+        // Obliczanie Delta Time
+        float currentTime = (float)glfwGetTime();
+        float deltaTime = currentTime - lastTime;
+        lastTime = currentTime;
+
+        // Ogranicznik dla stabilności (gdyby klatka trwała za długo)
+        if (deltaTime > 0.05f) deltaTime = 0.05f;
+
+        // --- 1. AKTUALIZACJA FIZYKI ---
+        m_SimEngine.Update(deltaTime);
+
+        // --- 2. PRZESŁANIE DANYCH DO GPU ---
+        // Musimy zamienić vector<Agent> na vector<float>
+        const auto& agents = m_SimEngine.GetAgents();
+        std::vector<float> gpuData;
+        gpuData.reserve(agents.size() * 3);
+        
+        for (const auto& agent : agents) {
+            gpuData.push_back(agent.position.x);
+            gpuData.push_back(agent.position.y);
+            gpuData.push_back(agent.position.z);
+        }
+
+        glBindBuffer(GL_ARRAY_BUFFER, VBO);
+        // Nadpisujemy bufor nowymi pozycjami (glBufferSubData jest szybsze niż glBufferData przy aktualizacji)
+        glBufferSubData(GL_ARRAY_BUFFER, 0, gpuData.size() * sizeof(float), gpuData.data());
+
+
+        // --- 3. RENDEROWANIE ---
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // --- RENDEROWANIE ---
         shader.Use();
-
-        // Prosta kamera "orbitująca" (automatyczny obrót)
-        float time = (float)glfwGetTime();
-        float radius = 3.0f;
-        float camX = sin(time) * radius;
-        float camZ = cos(time) * radius;
-
-        glm::mat4 view = glm::lookAt(glm::vec3(camX, 1.0f, camZ), // Gdzie jest kamera
-                                     glm::vec3(0.0f, 0.0f, 0.0f), // Na co patrzy (środek)
-                                     glm::vec3(0.0f, 1.0f, 0.0f)); // Gdzie jest "góra"
         
+        // Kamera (lekko oddalona)
+        glm::mat4 view = glm::lookAt(glm::vec3(0.0f, 1.0f, 4.0f), 
+                                     glm::vec3(0.0f, 0.5f, 0.0f), 
+                                     glm::vec3(0.0f, 1.0f, 0.0f));
         glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)m_Width / (float)m_Height, 0.1f, 100.0f);
-        
-        glm::mat4 mvp = projection * view;
-        
-        // Wyślij macierz i kolor do shadera
-        shader.SetMat4("u_ViewProjection", mvp);
-        shader.SetVec3("u_Color", glm::vec3(1.0f, 0.6f, 0.2f)); // Kolor ciasta
+        shader.SetMat4("u_ViewProjection", projection * view);
+        shader.SetVec3("u_Color", glm::vec3(1.0f, 0.8f, 0.6f)); // Kolor ciasta
 
-        // Narysuj punkty
         glBindVertexArray(VAO);
-        glDrawArrays(GL_POINTS, 0, numAgents);
-
-        // -------------------
+        glDrawArrays(GL_POINTS, 0, agents.size());
 
         glfwSwapBuffers(m_Window);
         glfwPollEvents();
     }
-
-    // Sprzątanie
+    
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
 }
