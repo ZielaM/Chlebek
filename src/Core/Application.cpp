@@ -77,19 +77,26 @@ void Application::MainLoop() {
     float lastTime = 0.0f;
 
     while (!glfwWindowShouldClose(m_Window)) {
-        // Obliczanie Delta Time
+        // 1. Obliczanie czasu rzeczywistego
         float currentTime = (float)glfwGetTime();
         float deltaTime = currentTime - lastTime;
         lastTime = currentTime;
 
-        // Ogranicznik dla stabilności (gdyby klatka trwała za długo)
-        if (deltaTime > 0.05f) deltaTime = 0.05f;
+        // Zabezpieczenie przed "spiralą śmierci" (gdyby gra się zawiesiła na moment)
+        if (deltaTime > 0.1f) deltaTime = 0.1f;
 
-        // --- 1. AKTUALIZACJA FIZYKI ---
-        m_SimEngine.Update(deltaTime);
+        // 2. Dodajemy czas do akumulatora
+        m_TimeAccumulator += deltaTime;
 
-        // --- 2. PRZESŁANIE DANYCH DO GPU ---
-        // Musimy zamienić vector<Agent> na vector<float>
+        // 3. FIZYKA: Wykonujemy tyle kroków, ile "uzbierało się" czasu
+        // Dzięki temu na Windowsie (2000 FPS) pętla wykona się rzadziej, 
+        // a na Linuxie (60 FPS) częściej, ale ZAWSZE o 0.01s symulacji.
+        while (m_TimeAccumulator >= m_FixedStep) {
+            m_SimEngine.Update(m_FixedStep); // <--- WAŻNE: Tu podajemy stałą wartość!
+            m_TimeAccumulator -= m_FixedStep;
+        }
+
+        // 4. PRZESŁANIE DANYCH (Interpolacja byłaby tu idealna, ale na razie wystarczy stan aktualny)
         const auto& agents = m_SimEngine.GetAgents();
         std::vector<float> gpuData;
         gpuData.reserve(agents.size() * 3);
@@ -105,7 +112,7 @@ void Application::MainLoop() {
         glBufferSubData(GL_ARRAY_BUFFER, 0, gpuData.size() * sizeof(float), gpuData.data());
 
 
-        // --- 3. RENDEROWANIE ---
+        // --- 5. RENDEROWANIE ---
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 

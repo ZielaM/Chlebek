@@ -24,21 +24,31 @@ void SimulationEngine::Update(float dt) {
     for (auto& agent : m_Agents) {
         if (agent.isFixed) continue;
 
-        // 1. Zeruj siły i dodaj grawitację
+        // 1. Siły
         agent.force = glm::vec3(0.0f);
         agent.force += m_Gravity * agent.mass;
 
-        // 2. Całkowanie (Fizyka Newtona: F = ma -> a = F/m)
+        // 2. Całkowanie
         glm::vec3 acceleration = agent.force / agent.mass;
-        
         agent.velocity += acceleration * dt;
-        agent.velocity *= m_Damping; // Opór ośrodka
-        agent.position += agent.velocity * dt;
+        
+        // Lepiej najpierw policzyć nową pozycję
+        glm::vec3 nextPos = agent.position + agent.velocity * dt;
 
-        // 3. Proste kolizje z podłogą (Miska)
-        if (agent.position.y < m_FloorY) {
-            agent.position.y = m_FloorY;
-            agent.velocity.y *= -0.5f; // Odbicie z utratą energii
+        // 3. Kolizja z podłogą (Ulepszona)
+        if (nextPos.y < m_FloorY + agent.radius) { // Uwzględniamy promień!
+            // Wyciągamy go na powierzchnię
+            nextPos.y = m_FloorY + agent.radius; 
+            
+            // Odwracamy prędkość z utratą energii
+            agent.velocity.y *= -0.5f; 
+            
+            // Proste tarcie o podłogę (żeby nie ślizgały się jak na lodzie)
+            agent.velocity.x *= 0.9f;
+            agent.velocity.z *= 0.9f;
         }
+
+        agent.position = nextPos;
+        agent.velocity *= m_Damping; // Opór powietrza
     }
 }

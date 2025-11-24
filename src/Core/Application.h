@@ -21,4 +21,7 @@ private:
     int m_Height = 720;
 
     SimulationEngine m_SimEngine;
+
+    float m_TimeAccumulator = 0.0f;
+    const float m_FixedStep = 0.01f; // Fizyka liczy się zawsze co 10ms (100 FPS)
 };
