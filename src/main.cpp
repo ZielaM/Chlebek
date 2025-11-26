@@ -3,7 +3,7 @@
 
 int main() {
     try {
-        Application app;
+        Application app(1280, 720, "Siatka Glutenowa");
         app.Run();
     } catch (const std::exception& e) {
         std::cerr << "BŁĄD KRYTYCZNY: " << e.what() << std::endl;
