@@ -1,0 +1,9 @@
+DO ZROBIENIA / POMYŚLENIA
+-------------------------
+* dodać graficzny mikser -> porusza się wg Lissajousa więc może być sobie patykiem
+* dodać przyklejalność skrobii
+* trzeci wykres
+
+-------------------------
+ewentualnie - a w sumie fajnie by było
+* bondPropability obliczany na podstawie temp -> rachunek prawdopodobieństwa

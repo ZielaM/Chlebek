@@ -111,6 +111,37 @@ void Application::MainLoop() {
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(1);
 
+    // VBO + VAO for Mixer (Rod) --------------------
+    glGenVertexArrays(1, &m_RodVAO);
+    glGenBuffers(1, &m_RodVBO);
+    glBindVertexArray(m_RodVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, m_RodVBO);
+
+    // 2 vertices * 3 floats per vertex
+    glBufferData(GL_ARRAY_BUFFER, 2 * 3 * sizeof(float), NULL, GL_DYNAMIC_DRAW);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    // Render Mixer as a vertical rod (line)
+    glm::vec3 mixer = m_SimEngine.m_Mixer.position;
+
+    // Two endpoints of the rod
+    float rodVertices[] = {
+        mixer.x, -1.0f, mixer.z,   // bottom point
+        mixer.x,  1.0f, mixer.z    // top point
+    };
+
+    glBindVertexArray(m_RodVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, m_RodVBO);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(rodVertices), rodVertices);
+
+    shader.SetVec3("u_Color", glm::vec3(1.0f, 0.0f, 0.0f));
+    glDrawArrays(GL_LINES, 0, 2);
+
+    //-------------------------------------------------------
+
+
     while (!glfwWindowShouldClose(m_Window)) {
         float currentFrame = glfwGetTime();
         float deltaTime = currentFrame - lastFrame;
@@ -250,6 +281,7 @@ void Application::MainLoop() {
             glDrawArrays(GL_POINTS, 0, agents.size());
             
             // 3. Render Mixer
+            /*
             float mixerPos[] = { m_SimEngine.m_Mixer.position.x, 0.0f, m_SimEngine.m_Mixer.position.z };
             glBindBuffer(GL_ARRAY_BUFFER, m_AgentVBO);
             glBufferSubData(GL_ARRAY_BUFFER, 0, 3 * sizeof(float), mixerPos);
@@ -257,6 +289,43 @@ void Application::MainLoop() {
             glPointSize(20.0f);
             glDrawArrays(GL_POINTS, 0, 1);
             glPointSize(1.0f);
+            */
+            
+            
+            //NASZ KOMENTARZ
+            //generalnie rod dziala, ale gdy mikser jest punktem i predkosc = 0 to stoi on w idealnym srodku containera. 
+            //problem jest taki ze ten jago domyslny punkt rowniez z jakiegos powodu rysuje linie - czyli sa 2 kinda prostopadle
+            //i kolor nie dziala for some reason
+            //i ZNIKA PUDELKO WTF
+
+            /*
+
+            // Render Mixer as a vertical rod (line)
+            glm::vec3 mixer = m_SimEngine.m_Mixer.position;
+
+           
+
+            // The bottom endpoint moves with the Lissajous pattern
+            glm::vec3 rodTop(0,1,0);
+            glm::vec3 rodBottom(mixer.x, -1.0f, mixer.z);
+            
+
+            // Two endpoints of the rod
+            float rodVertices[] = {
+                rodTop.x,    rodTop.y,    rodTop.z,
+                rodBottom.x, rodBottom.y, rodBottom.z
+            };
+
+            glBindVertexArray(m_RodVAO);
+            glBindBuffer(GL_ARRAY_BUFFER, m_RodVBO);
+            glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(rodVertices), rodVertices);
+            shader.Use();
+            shader.SetVec3("u_Color", glm::vec3(1.0f, 1.0f, 0.0f));
+            
+            glDrawArrays(GL_LINES, 0, 2);
+
+            */
+
             
             // 4. Render Container (Wireframe)
             std::vector<float> containerPts;
@@ -313,6 +382,9 @@ void Application::MainLoop() {
     glDeleteVertexArrays(1, &m_BondVAO);
     glDeleteBuffers(1, &m_BondVBO);
     glDeleteBuffers(1, &m_BondColorVBO);
+    glDeleteVertexArrays(1, &m_RodVAO);
+    glDeleteBuffers(1, &m_RodVBO);
+
 }
 
 void Application::Run() {
