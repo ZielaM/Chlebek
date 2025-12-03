@@ -94,7 +94,7 @@ void SimulationEngine::Update(float dt) {
     // 3. Chemistry: Dynamic Bond Creation
     // Note: Cannot easily parallelize due to m_Springs modification
     for (auto& agent : m_Agents) {
-        if (agent.type == STARCH || agent.type == YEAST) continue; // Only Glutenin/Gliadin form bonds
+        if (agent.type == STARCH) continue; // Only Glutenin/Gliadin form bonds
         if (agent.connectedAgentIDs.size() >= agent.maxBonds) continue;
 
             m_Grid.ForEachNeighbor(agent.position, [&](Agent* neighbor) {
@@ -138,12 +138,11 @@ void SimulationEngine::Update(float dt) {
                     agent.force += repulsion + friction;
                 }
 
-                // 2. Dynamic Bond Creation (Probabilistic)
+            // 2. Dynamic Bond Creation (Probabilistic)
             // Only Glutenin-Gliadin or Glutenin-Glutenin form bonds
             bool canBond = (agent.type == GLUTENIN && neighbor->type == GLIADIN) || 
                            (agent.type == GLUTENIN && neighbor->type == GLUTENIN);
                            
-            // float dist = glm::distance(agent.position, neighbor->position); // Already calculated
 
             // RECALCULATE dist for bonding check (since we only calculated distSq above if close)
             float dist = glm::distance(agent.position, neighbor->position);

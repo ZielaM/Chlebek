@@ -2,8 +2,8 @@
 #include <glm/glm.hpp>
 #include <vector>
 
-// Added YEAST
-enum AgentType { GLUTENIN, GLIADIN, STARCH, YEAST };
+
+enum AgentType { GLUTENIN, GLIADIN, STARCH};
 
 struct Agent {
     int id;
@@ -26,6 +26,5 @@ struct Agent {
         if (type == STARCH) { mass = 10.0f; radius = 0.05f; maxBonds = 0; }
         else if (type == GLUTENIN) { mass = 2.0f; radius = 0.03f; maxBonds = 4; }
         else if (type == GLIADIN) { mass = 1.0f; radius = 0.02f; maxBonds = 2; }
-        else if (type == YEAST) { mass = 5.0f; radius = 0.04f; maxBonds = 0; } // Yeast start small
     }
 };

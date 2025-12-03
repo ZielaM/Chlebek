@@ -34,7 +34,7 @@ private:
     
     // Rendering
     unsigned int m_AgentVAO, m_AgentVBO, m_ColorVBO;
-    unsigned int m_BondVAO, m_BondVBO;
+    unsigned int m_BondVAO, m_BondVBO, m_BondColorVBO;
     
     // UI / Plot Data
     bool m_RenderSimulation = true;
