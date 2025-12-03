@@ -145,12 +145,12 @@ void SimulationEngine::Update(float dt) {
                            
             // float dist = glm::distance(agent.position, neighbor->position); // Already calculated
 
-            // Recalculate dist for bonding check (since we only calculated distSq above if close)
+            // RECALCULATE dist for bonding check (since we only calculated distSq above if close)
             float dist = glm::distance(agent.position, neighbor->position);
 
             if (canBond && dist < m_BondDistance) {
                 // Check probability (simulating time/temperature factor)
-                // Higher temp could actually BREAK bonds, but for formation we assume mixing helps.
+                // Higher temp could actually BREAK bonds, but for formation we assume mixing helps. POPRAWIC
                 // Let's keep it simple: random chance if close.
                 static std::uniform_real_distribution<float> distProb(0.0f, 1.0f);
                 if (distProb(gen) < m_BondProbability) {
