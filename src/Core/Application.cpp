@@ -97,12 +97,19 @@ void Application::MainLoop() {
     // VBO for Bonds (Lines)
     glGenVertexArrays(1, &m_BondVAO);
     glGenBuffers(1, &m_BondVBO);
+    glGenBuffers(1, &m_BondColorVBO);
     glBindVertexArray(m_BondVAO);
     glBindBuffer(GL_ARRAY_BUFFER, m_BondVBO);
     // Estimate max bonds: 1000 agents * 4 bonds * 2 points * 3 floats
     glBufferData(GL_ARRAY_BUFFER, 1000 * 8 * 3 * sizeof(float), NULL, GL_DYNAMIC_DRAW);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
+    
+    // Color for Bonds
+    glBindBuffer(GL_ARRAY_BUFFER, m_BondColorVBO);
+    glBufferData(GL_ARRAY_BUFFER, 1000 * 8 * 3 * sizeof(float), NULL, GL_DYNAMIC_DRAW);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(1);
 
     while (!glfwWindowShouldClose(m_Window)) {
         float currentFrame = glfwGetTime();
@@ -168,9 +175,17 @@ void Application::MainLoop() {
             // We draw bonds FIRST so they are behind agents
             const auto& springs = m_SimEngine.m_Springs;
             if (!springs.empty()) {
-                std::vector<float> bondPos;
+                static std::vector<float> bondPos;
+                static std::vector<float> bondColor;
+                bondPos.clear();
+                bondColor.clear();
                 bondPos.reserve(springs.size() * 2 * 3);
+                bondColor.reserve(springs.size() * 2 * 3);
+                
+                const float whiteColor[3] = {1.0f, 1.0f, 1.0f};
+                
                 for (const auto& s : springs) {
+                    // Position data
                     bondPos.push_back(s.a->position.x);
                     bondPos.push_back(s.a->position.y);
                     bondPos.push_back(s.a->position.z);
@@ -178,20 +193,30 @@ void Application::MainLoop() {
                     bondPos.push_back(s.b->position.x);
                     bondPos.push_back(s.b->position.y);
                     bondPos.push_back(s.b->position.z);
+                    
+                    // Color data (white for both vertices)
+                    bondColor.insert(bondColor.end(), whiteColor, whiteColor + 3);
+                    bondColor.insert(bondColor.end(), whiteColor, whiteColor + 3);
                 }
+                
+                glBindVertexArray(m_BondVAO);
                 
                 glBindBuffer(GL_ARRAY_BUFFER, m_BondVBO);
                 glBufferSubData(GL_ARRAY_BUFFER, 0, bondPos.size() * sizeof(float), bondPos.data());
                 
-                glBindVertexArray(m_BondVAO);
-                shader.SetVec3("u_Color", glm::vec3(0.6f, 0.6f, 0.6f)); // Grey Bonds
+                glBindBuffer(GL_ARRAY_BUFFER, m_BondColorVBO);
+                glBufferSubData(GL_ARRAY_BUFFER, 0, bondColor.size() * sizeof(float), bondColor.data());
+                
                 glDrawArrays(GL_LINES, 0, bondPos.size() / 3);
             }
             
             // 2. Render Agents
             const auto& agents = m_SimEngine.GetAgents();
-            std::vector<float> gpuPos;
-            std::vector<float> gpuColor;
+            
+            static std::vector<float> gpuPos;
+            static std::vector<float> gpuColor;
+            gpuPos.clear();
+            gpuColor.clear();
             gpuPos.reserve(agents.size() * 3);
             gpuColor.reserve(agents.size() * 3);
             
@@ -201,17 +226,18 @@ void Application::MainLoop() {
                 gpuPos.push_back(agent.position.z);
                 
                 // Color by Type
-                if (agent.type == STARCH) { // White
-                    gpuColor.push_back(0.9f); gpuColor.push_back(0.9f); gpuColor.push_back(0.9f);
-                } else if (agent.type == GLUTENIN) { // Orange
-                    gpuColor.push_back(1.0f); gpuColor.push_back(0.6f); gpuColor.push_back(0.0f);
-                } else if (agent.type == GLIADIN) { // Yellow
-                    gpuColor.push_back(1.0f); gpuColor.push_back(0.9f); gpuColor.push_back(0.2f);
+                switch (agent.type) {
+                    case STARCH: // White
+                        gpuColor.insert(gpuColor.end(), {0.9f, 0.9f, 0.9f});
+                        break;
+                    case GLUTENIN: // Orange
+                        gpuColor.insert(gpuColor.end(), {1.0f, 0.6f, 0.0f});
+                        break;
+                    case GLIADIN: // Yellow
+                        gpuColor.insert(gpuColor.end(), {1.0f, 0.9f, 0.2f});
+                        break;
                 }
-                // No Yeast agents
             }
-            
-            shader.SetVec3("u_Color", glm::vec3(1.0f)); 
             
             glBindBuffer(GL_ARRAY_BUFFER, m_AgentVBO);
             glBufferSubData(GL_ARRAY_BUFFER, 0, gpuPos.size() * sizeof(float), gpuPos.data());
@@ -220,6 +246,7 @@ void Application::MainLoop() {
             glBufferSubData(GL_ARRAY_BUFFER, 0, gpuColor.size() * sizeof(float), gpuColor.data());
 
             glBindVertexArray(m_AgentVAO);
+            shader.SetVec3("u_Color", glm::vec3(1.0f));
             glDrawArrays(GL_POINTS, 0, agents.size());
             
             // 3. Render Mixer
@@ -282,8 +309,10 @@ void Application::MainLoop() {
     
     glDeleteVertexArrays(1, &m_AgentVAO);
     glDeleteBuffers(1, &m_AgentVBO);
+    glDeleteBuffers(1, &m_ColorVBO);
     glDeleteVertexArrays(1, &m_BondVAO);
     glDeleteBuffers(1, &m_BondVBO);
+    glDeleteBuffers(1, &m_BondColorVBO);
 }
 
 void Application::Run() {

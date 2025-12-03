@@ -27,9 +27,9 @@ private:
     SpatialGrid m_Grid;
     
     // --- Physics Parameters ---
-    float m_SpringK = 2500.0f;          // Stiffness of the gluten bonds
-    float m_RepulsionK = 1000.0f;       // Repulsion force to maintain volume
-    float m_CollisionRadius = 0.1f;     // Radius at which repulsion activates
+    float m_SpringK = 800.0f;           // Stiffness of the gluten bonds
+    float m_RepulsionK = 5000.0f;       // Repulsion force to maintain volume
+    float m_CollisionRadius = 0.15f;    // Radius at which repulsion activates
     float m_StaticFriction = 0.0f;      // Friction when relative velocity is low
     float m_DynamicFriction = 0.0f;     // Friction when sliding
     
