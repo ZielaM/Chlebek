@@ -352,7 +352,8 @@ void Application::MainLoop() {
            
 
             // The bottom endpoint moves with the Lissajous pattern
-            glm::vec3 rodTop(0,1,0);//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        
+            glm::vec3 rodTop(0.0f, m_SimEngine.m_ContainerHeight, 0.0f);
             glm::vec3 rodBottom(mixer.x, -1.0f, mixer.z);
             
 
