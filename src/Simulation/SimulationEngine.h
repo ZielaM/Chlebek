@@ -46,7 +46,7 @@ private:
     float m_BondProbability = 0.1f;     // Probability of forming a bond per frame
     
     // --- Sticky Starch ---
-    float m_StickyForceK = 500.0f;      // Attraction force to bonds
+    float m_StickyForceK = 1000.0f;      // Attraction force to bonds
     float m_StickyDistance = 0.08f;     // Interaction range for stickiness
     
     // --- Environment ---
