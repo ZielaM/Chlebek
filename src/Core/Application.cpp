@@ -230,6 +230,7 @@ void Application::MainLoop() {
                     bondColor.insert(bondColor.end(), whiteColor, whiteColor + 3);
                 }
                 
+                shader.SetVec3("u_Color", glm::vec3(0.8f));
                 glBindVertexArray(m_BondVAO);
                 
                 glBindBuffer(GL_ARRAY_BUFFER, m_BondVBO);
@@ -320,7 +321,10 @@ void Application::MainLoop() {
             glBufferSubData(GL_ARRAY_BUFFER, 0, containerPts.size() * sizeof(float), containerPts.data());
             glBindVertexArray(m_ContainerVAO);
 
-            shader.SetVec3("u_Color", glm::vec3(0.5f, 0.5f, 0.5f));
+            // Ensure vColor is white for objects without color attribute
+            glVertexAttrib3f(1, 1.0f, 1.0f, 1.0f);
+
+            shader.SetVec3("u_Color", glm::vec3(1.0f));
             glDrawArrays(GL_LINE_STRIP, 0, segments + 1); // Bottom
             glDrawArrays(GL_LINE_STRIP, segments + 1, segments + 1); // Top
             glDrawArrays(GL_LINES, (segments + 1) * 2, 4); // Lid Cross
@@ -366,7 +370,7 @@ void Application::MainLoop() {
             glBindBuffer(GL_ARRAY_BUFFER, m_RodVBO);
             glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(rodVertices), rodVertices);
             shader.Use();
-            shader.SetVec3("u_Color", glm::vec3(1.0f, 1.0f, 0.0f));
+            shader.SetVec3("u_Color", glm::vec3(0.0f, 1.0f, 0.0f));
             
             glDrawArrays(GL_LINES, 0, 2);
 
