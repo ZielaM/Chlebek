@@ -259,6 +259,44 @@ void SimulationEngine::Update(float dt) {
             
             a->force += force;
             b->force -= force;
+
+            // --- Sticky Starch Implementation ---
+            // Starch particles (STARCH) are attracted to bonds (Line Segment AB)
+            glm::vec3 midPoint = (a->position + b->position) * 0.5f;
+            
+            // Check neighbors near the bond's center
+            m_Grid.ForEachNeighbor(midPoint, [&](Agent* neighbor) {
+                if (neighbor->type != STARCH) return;
+
+                // Point-Segment Distance
+                // Project neighbor->pos (P) onto line segment AB
+                glm::vec3 pa = neighbor->position - a->position;
+                glm::vec3 ba = b->position - a->position;
+                float h = glm::clamp(glm::dot(pa, ba) / glm::dot(ba, ba), 0.0f, 1.0f);
+                glm::vec3 closestPoint = a->position + ba * h; // P'
+                
+                glm::vec3 distVec = closestPoint - neighbor->position;
+                float distSq = glm::length2(distVec);
+
+                if (distSq < m_StickyDistance * m_StickyDistance) {
+                    float dist = std::sqrt(distSq);
+                    if (dist > 0.0001f) {
+                        glm::vec3 attractDir = distVec / dist;
+                        // Linear fallout: strong at 0, zero at StickyDistance
+                        float strength = (1.0f - dist / m_StickyDistance) * m_StickyForceK;
+                        
+                        glm::vec3 stickyForce = attractDir * strength;
+                        
+                        // Apply force to Starch
+                        neighbor->force += stickyForce;
+                        
+                        // Newton's 3rd: Apply opposite force to the bond (distributed to A and B based on projection h)
+                        // This ensures the bond "feels" the starch dragging it
+                        a->force -= stickyForce * (1.0f - h);
+                        b->force -= stickyForce * h;
+                    }
+                }
+            });
         }
         ++it;
     }

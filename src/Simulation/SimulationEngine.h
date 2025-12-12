@@ -15,7 +15,7 @@ public:
 private:
     std::vector<Agent> m_Agents;
     // Parameters
-    glm::vec3 m_Gravity = glm::vec3(0.0f, -9.81f, 0.0f);
+    glm::vec3 m_Gravity = glm::vec3(0.0f, -0.5f, 0.0f);
     float m_FloorY = -1.0f;
     float m_ContainerRadius = 1.0f; // Cylindrical container radius (Widened to 1.0)
     float m_ContainerHeight = 1.5f; // Lid height (lowered for visibility)
@@ -44,6 +44,10 @@ private:
     // --- Realism ---
     float m_Temperature = 25.0f;        // Controls Brownian motion intensity
     float m_BondProbability = 0.1f;     // Probability of forming a bond per frame
+    
+    // --- Sticky Starch ---
+    float m_StickyForceK = 500.0f;      // Attraction force to bonds
+    float m_StickyDistance = 0.08f;     // Interaction range for stickiness
     
     // --- Environment ---
     Mixer m_Mixer;
