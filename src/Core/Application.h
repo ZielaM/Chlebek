@@ -36,6 +36,7 @@ private:
     unsigned int m_AgentVAO, m_AgentVBO, m_ColorVBO;
     unsigned int m_BondVAO, m_BondVBO, m_BondColorVBO;
     unsigned int m_RodVAO, m_RodVBO, m_RodColorVBO;
+    unsigned int m_ContainerVAO, m_ContainerVBO;
     
     
     // UI / Plot Data
