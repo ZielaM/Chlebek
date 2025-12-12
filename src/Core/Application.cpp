@@ -230,7 +230,7 @@ void Application::MainLoop() {
                     bondColor.insert(bondColor.end(), whiteColor, whiteColor + 3);
                 }
                 
-                shader.SetVec3("u_Color", glm::vec3(0.8f));
+                shader.SetVec3("u_Color", glm::vec3(0.6f));
                 glBindVertexArray(m_BondVAO);
                 
                 glBindBuffer(GL_ARRAY_BUFFER, m_BondVBO);
