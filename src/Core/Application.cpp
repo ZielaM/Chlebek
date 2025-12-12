@@ -123,7 +123,7 @@ void Application::MainLoop() {
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
-    // Render Mixer as a vertical rod (line)
+    /* Render Mixer as a vertical rod (line) - DLACZEGO TA CZESC KODU NIC NIE ZMIENIA
     glm::vec3 mixer = m_SimEngine.m_Mixer.position;
 
     // Two endpoints of the rod
@@ -140,7 +140,7 @@ void Application::MainLoop() {
     glDrawArrays(GL_LINES, 0, 2);
 
     //-------------------------------------------------------
-
+    */
 
     while (!glfwWindowShouldClose(m_Window)) {
         float currentFrame = glfwGetTime();
@@ -279,6 +279,52 @@ void Application::MainLoop() {
             glBindVertexArray(m_AgentVAO);
             shader.SetVec3("u_Color", glm::vec3(1.0f));
             glDrawArrays(GL_POINTS, 0, agents.size());
+
+            // W MainLoop, obok VBO agentow/bonds
+            glGenVertexArrays(1, &m_ContainerVAO);
+            glGenBuffers(1, &m_ContainerVBO);
+            glBindVertexArray(m_ContainerVAO);
+            glBindBuffer(GL_ARRAY_BUFFER, m_ContainerVBO);
+            // Kontener ma stala geometrie
+            glBufferData(GL_ARRAY_BUFFER, 1000 * sizeof(float), NULL, GL_DYNAMIC_DRAW); // Duza rezerwa
+            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+            glEnableVertexAttribArray(0);
+
+            // 4. Render Container (Wireframe)
+            std::vector<float> containerPts;
+            int segments = 64;
+            float r = m_SimEngine.m_ContainerRadius;
+            for (int i = 0; i <= segments; ++i) {
+                float theta = 2.0f * 3.14159f * float(i) / float(segments);
+                containerPts.push_back(r * cos(theta));
+                containerPts.push_back(-1.0f); // Floor
+                containerPts.push_back(r * sin(theta));
+            }
+            // --- Render Lid (Top Circle) ---
+            // We draw the top rim of the container at m_ContainerHeight
+            for (int i = 0; i <= segments; ++i) {
+                float theta = 2.0f * 3.14159f * float(i) / float(segments);
+                containerPts.push_back(r * cos(theta));
+                containerPts.push_back(m_SimEngine.m_ContainerHeight); // Top (Lid)
+                containerPts.push_back(r * sin(theta));
+            }
+
+            // --- Render Lid Cross ---
+            // Visual aid to help the user see the exact height of the lid
+            containerPts.push_back(-r); containerPts.push_back(m_SimEngine.m_ContainerHeight); containerPts.push_back(0.0f);
+            containerPts.push_back(r); containerPts.push_back(m_SimEngine.m_ContainerHeight); containerPts.push_back(0.0f);
+            containerPts.push_back(0.0f); containerPts.push_back(m_SimEngine.m_ContainerHeight); containerPts.push_back(-r);
+            containerPts.push_back(0.0f); containerPts.push_back(m_SimEngine.m_ContainerHeight); containerPts.push_back(r);
+
+            glBindBuffer(GL_ARRAY_BUFFER, m_ContainerVBO);
+            glBufferSubData(GL_ARRAY_BUFFER, 0, containerPts.size() * sizeof(float), containerPts.data());
+            glBindVertexArray(m_ContainerVAO);
+
+            shader.SetVec3("u_Color", glm::vec3(0.5f, 0.5f, 0.5f));
+            glDrawArrays(GL_LINE_STRIP, 0, segments + 1); // Bottom
+            glDrawArrays(GL_LINE_STRIP, segments + 1, segments + 1); // Top
+            glDrawArrays(GL_LINES, (segments + 1) * 2, 4); // Lid Cross
+
             
             // 3. Render Mixer
             /*
@@ -298,7 +344,7 @@ void Application::MainLoop() {
             //i kolor nie dziala for some reason
             //i ZNIKA PUDELKO WTF
 
-            /*
+            
 
             // Render Mixer as a vertical rod (line)
             glm::vec3 mixer = m_SimEngine.m_Mixer.position;
@@ -306,7 +352,7 @@ void Application::MainLoop() {
            
 
             // The bottom endpoint moves with the Lissajous pattern
-            glm::vec3 rodTop(0,1,0);
+            glm::vec3 rodTop(0,1,0);//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             glm::vec3 rodBottom(mixer.x, -1.0f, mixer.z);
             
 
@@ -324,44 +370,8 @@ void Application::MainLoop() {
             
             glDrawArrays(GL_LINES, 0, 2);
 
-            */
+            
 
-            
-            // 4. Render Container (Wireframe)
-            std::vector<float> containerPts;
-            int segments = 64;
-            float r = m_SimEngine.m_ContainerRadius;
-            for (int i = 0; i <= segments; ++i) {
-                float theta = 2.0f * 3.14159f * float(i) / float(segments);
-                containerPts.push_back(r * cos(theta));
-                containerPts.push_back(-1.0f); // Floor
-                containerPts.push_back(r * sin(theta));
-            }
-            // --- Render Lid (Top Circle) ---
-            // We draw the top rim of the container at m_ContainerHeight
-             for (int i = 0; i <= segments; ++i) {
-                float theta = 2.0f * 3.14159f * float(i) / float(segments);
-                containerPts.push_back(r * cos(theta));
-                containerPts.push_back(m_SimEngine.m_ContainerHeight); // Top (Lid)
-                containerPts.push_back(r * sin(theta));
-            }
-            
-            // --- Render Lid Cross ---
-            // Visual aid to help the user see the exact height of the lid
-            containerPts.push_back(-r); containerPts.push_back(m_SimEngine.m_ContainerHeight); containerPts.push_back(0.0f);
-            containerPts.push_back(r); containerPts.push_back(m_SimEngine.m_ContainerHeight); containerPts.push_back(0.0f);
-            containerPts.push_back(0.0f); containerPts.push_back(m_SimEngine.m_ContainerHeight); containerPts.push_back(-r);
-            containerPts.push_back(0.0f); containerPts.push_back(m_SimEngine.m_ContainerHeight); containerPts.push_back(r);
-            
-            glBindBuffer(GL_ARRAY_BUFFER, m_AgentVBO);
-            glBufferData(GL_ARRAY_BUFFER, containerPts.size() * sizeof(float), containerPts.data(), GL_DYNAMIC_DRAW); 
-            shader.SetVec3("u_Color", glm::vec3(0.5f, 0.5f, 0.5f));
-            glDrawArrays(GL_LINE_STRIP, 0, segments + 1); // Bottom
-            glDrawArrays(GL_LINE_STRIP, segments + 1, segments + 1); // Top
-            glDrawArrays(GL_LINES, (segments + 1) * 2, 4); // Lid Cross
-            
-            // Restore buffer size for agents next frame
-             glBufferData(GL_ARRAY_BUFFER, 1000 * 3 * sizeof(float), NULL, GL_DYNAMIC_DRAW);
             
         } else {
             glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
