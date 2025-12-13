@@ -40,17 +40,10 @@ void SimulationEngine::Update(float dt) {
     for (auto& spring : m_Springs) {
         // Expansion
         if (spring.restLength < m_MaxSpringLength) {
-            spring.restLength += m_SpringExpansionRate * dt * 0.01f;
+            spring.restLength += m_SpringExpansionRate * dt * 0.05f;
         }
         
         // Compression Limit (Min Length)
-        // If spring is too short, we can increase restLength temporarily or just rely on repulsion?
-        // Actually, the user asked for "min bond length". This usually means the spring resists compression HARD.
-        // We handle this by ensuring the spring force pushes back strongly if length < min.
-        // But standard spring physics already does this if restLength > currentLength.
-        // So we just ensure restLength never drops below min? No, restLength is the target.
-        // We want to ensure the *actual* length doesn't drop.
-        // Let's just ensure restLength is at least m_MinSpringLength.
         if (spring.restLength < m_MinSpringLength) {
             spring.restLength = m_MinSpringLength;
         }
@@ -97,52 +90,49 @@ void SimulationEngine::Update(float dt) {
         if (agent.type == STARCH) continue; // Only Glutenin/Gliadin form bonds
         if (agent.connectedAgentIDs.size() >= agent.maxBonds) continue;
 
-            m_Grid.ForEachNeighbor(agent.position, [&](Agent* neighbor) {
-                if (agent.id == neighbor->id) return;
-                
-                float distSq = glm::distance2(agent.position, neighbor->position);
-                float collisionRadiusSq = m_CollisionRadius * m_CollisionRadius;
-                
-                // --- 1. Volume Preservation & Friction ---
-                // We check if agents are too close (inside Collision Radius).
-                // If so, we apply a Repulsion Force to simulate volume (preventing them from merging).
-                if (distSq < collisionRadiusSq && distSq > 0.000001f) {
-                    float dist = std::sqrt(distSq);
-                    glm::vec3 dir = (agent.position - neighbor->position) / dist;
-                    float overlap = m_CollisionRadius - dist;
-                    
-                    // Repulsion: Proportional to overlap depth (Hooke's Law-ish)
-                    glm::vec3 repulsion = dir * overlap * m_RepulsionK;
-                    
-                    // Friction (Coulomb Model):
-                    // Resists relative motion between particles.
-                    // F_friction <= mu * F_normal (where F_normal is our Repulsion)
-                    glm::vec3 relVel = agent.velocity - neighbor->velocity;
-                    float v_normal = glm::dot(relVel, dir);
-                    glm::vec3 v_tangent = relVel - v_normal * dir;
-                    float vt_len = glm::length(v_tangent);
-                    
-                    glm::vec3 friction(0.0f);
-                    if (vt_len > 0.0001f) {
-                        float fn = glm::length(repulsion);
-                        // Use Static or Dynamic friction coefficient based on speed
-                        float mu = (vt_len < 0.1f) ? m_StaticFriction : m_DynamicFriction;
-                        glm::vec3 f_dir = -v_tangent / vt_len;
-                        friction = f_dir * fn * mu;
-                    }
-                    
-                    // OPTIMIZATION: Lock-Free Update
-                    // We only update the current 'agent'. The 'neighbor' will be updated
-                    // when the outer loop reaches it. This avoids race conditions without
-                    // using slow #pragma omp critical sections.
-                    agent.force += repulsion + friction;
+        m_Grid.ForEachNeighbor(agent.position, [&](Agent* neighbor) {
+            if (agent.id == neighbor->id) return;
+
+            float distSq = glm::distance2(agent.position, neighbor->position);
+            float collisionRadiusSq = m_CollisionRadius * m_CollisionRadius;
+
+            // --- 1. Volume Preservation & Friction ---
+            // We check if agents are too close (inside Collision Radius).
+            // If so, we apply a Repulsion Force to simulate volume (preventing them from merging).
+            if (distSq < collisionRadiusSq && distSq > 0.000001f) {
+                float dist = std::sqrt(distSq);
+                glm::vec3 dir = (agent.position - neighbor->position) / dist;
+                float overlap = m_CollisionRadius - dist;
+
+                // Repulsion: Proportional to overlap depth (Hooke's Law-ish)
+                glm::vec3 repulsion = dir * overlap * m_RepulsionK;
+
+                // Friction (Coulomb Model):
+                // Resists relative motion between particles.
+                // F_friction <= mu * F_normal (where F_normal is our Repulsion)
+                glm::vec3 relVel = agent.velocity - neighbor->velocity;
+                float v_normal = glm::dot(relVel, dir);
+                glm::vec3 v_tangent = relVel - v_normal * dir;
+                float vt_len = glm::length(v_tangent);
+
+                glm::vec3 friction(0.0f);
+                if (vt_len > 0.0001f) {
+                    float fn = glm::length(repulsion);
+                    // Use Static or Dynamic friction coefficient based on speed
+                    float mu = (vt_len < 0.1f) ? m_StaticFriction : m_DynamicFriction;
+                    glm::vec3 f_dir = -v_tangent / vt_len;
+                    friction = f_dir * fn * mu;
                 }
+
+                // OPTIMIZATION: Lock-Free Update
+                agent.force += repulsion + friction;
+            }
 
             // 2. Dynamic Bond Creation (Probabilistic)
             // Only Glutenin-Gliadin or Glutenin-Glutenin form bonds
-            bool canBond = (agent.type == GLUTENIN && neighbor->type == GLIADIN) || 
-                           (agent.type == GLUTENIN && neighbor->type == GLUTENIN);
-                           
+            bool canBond = (agent.type == GLUTENIN && neighbor->type == GLIADIN) ||
+                (agent.type == GLUTENIN && neighbor->type == GLUTENIN);
+
 
             // RECALCULATE dist for bonding check (since we only calculated distSq above if close)
             float dist = glm::distance(agent.position, neighbor->position);
@@ -158,20 +148,20 @@ void SimulationEngine::Update(float dt) {
                     for (int id : agent.connectedAgentIDs) {
                         if (id == neighbor->id) { alreadyConnected = true; break; }
                     }
-                    
-                    if (!alreadyConnected && 
-                        agent.connectedAgentIDs.size() < agent.maxBonds && 
+
+                    if (!alreadyConnected &&
+                        agent.connectedAgentIDs.size() < agent.maxBonds &&
                         neighbor->connectedAgentIDs.size() < neighbor->maxBonds) {
-                        
+
                         Spring newSpring;
                         newSpring.a = &agent;
                         newSpring.b = neighbor;
                         newSpring.restLength = dist;
                         newSpring.springConstant = m_SpringK;
                         newSpring.breakingThreshold = m_BreakingThreshold;
-                        
+
                         // Critical section for vector modification
-                        #pragma omp critical
+#pragma omp critical
                         {
                             m_Springs.push_back(newSpring);
                             agent.connectedAgentIDs.push_back(neighbor->id);
@@ -180,6 +170,51 @@ void SimulationEngine::Update(float dt) {
                     }
                 }
             }
+
+            });
+    }
+
+    //3.5. CHEMISTRY: DYNAMIC STARCH ANCHORING (Skrobia wchodzi w sklad Ciasta)
+
+            const float STARCH_BOND_DISTANCE = 4.0f;
+            const float STARCH_REST_LENGTH = 0.1f;
+            const float STARCH_SPRING_MULTIPLIER = 15.0f;
+
+            static std::uniform_real_distribution<float> distProb(0.0f, 1.0f);
+            for (auto& starchAgent : m_Agents) {
+                if (starchAgent.type != STARCH || starchAgent.isStarchBonded) continue;
+
+                m_Grid.ForEachNeighbor(starchAgent.position, [&](Agent* neighbor) {
+                    if (neighbor->type == STARCH || starchAgent.id == neighbor->id) return;
+                    if (neighbor->connectedAgentIDs.empty()) return;
+
+                    float dist = glm::distance(starchAgent.position, neighbor->position);
+                    if (dist < STARCH_BOND_DISTANCE) {
+                        if (distProb(gen) < m_BondProbability * 5.0f) {
+                            //nowe krotkie sztywne wiazanie
+                            Spring newStarchSpring;
+                            newStarchSpring.a = &starchAgent;
+                            newStarchSpring.b = neighbor;
+
+                            //tymi parametrami mozna sie pobawic 
+
+                            newStarchSpring.restLength = STARCH_REST_LENGTH;
+                            newStarchSpring.springConstant = m_SpringK * STARCH_SPRING_MULTIPLIER;
+                            newStarchSpring.breakingThreshold = STARCH_REST_LENGTH + 0.5f;
+
+                            // Critical section for vector modification                            
+#pragma omp critical
+
+                            {//Nie dodajemy do connectedAgentIDs, aby nie wplywac na 'maxBonds'glutenu
+                                m_Springs.push_back(newStarchSpring);
+                                starchAgent.isStarchBonded = true;
+                            }
+
+                            return;
+
+                            }
+
+                        }
         });
     }
 
@@ -260,7 +295,7 @@ void SimulationEngine::Update(float dt) {
             a->force += force;
             b->force -= force;
 
-            // --- Sticky Starch Implementation ---
+            /*/ --- Sticky Starch Implementation ---
             // Starch particles (STARCH) are attracted to bonds (Line Segment AB)
             glm::vec3 midPoint = (a->position + b->position) * 0.5f;
             
@@ -296,7 +331,9 @@ void SimulationEngine::Update(float dt) {
                         b->force -= stickyForce * h;
                     }
                 }
+                
             });
+            */
         }
         ++it;
     }

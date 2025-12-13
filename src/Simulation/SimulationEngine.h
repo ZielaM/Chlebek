@@ -45,10 +45,10 @@ private:
     float m_Temperature = 25.0f;        // Controls Brownian motion intensity
     float m_BondProbability = 0.1f;     // Probability of forming a bond per frame
     
+    /*
     // --- Sticky Starch ---
-    float m_StickyForceK = 1000.0f;      // Attraction force to bonds
-    float m_StickyDistance = 0.08f;     // Interaction range for stickiness
-    
+    float m_StickyForceK = 3000.0f;      // Attraction force to bonds
+    float m_StickyDistance = 0.08f;     // Interaction range for stickiness*/
     // --- Environment ---
     Mixer m_Mixer;
     enum GravityMode { NONE, GRAVITY, CENTRAL };
