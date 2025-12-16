@@ -41,11 +41,19 @@ private:
     
     // UI / Plot Data
     bool m_RenderSimulation = true;
-    float m_TimeScale = 1.0f;
+    float m_TimeScale = 0.250f;
     bool m_IsPaused = false;
     
     std::vector<float> m_PlotTime;
     std::vector<float> m_PlotBonds;
     std::vector<float> m_PlotBroken;
     std::vector<float> m_PlotYoungs;
+    
+    // Simulation Config
+    float m_ProteinRatio = 0.5f;
+    float m_StarchRatio = 0.5f;
+    int m_TotalAgents = 1000;
+    
+    void ResetSimulation();
+    int m_LastBrokenBondsTotal = 0;
 };

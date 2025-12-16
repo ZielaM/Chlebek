@@ -13,12 +13,21 @@ struct Mixer {
     float a = 3.0f;
     float b = 2.0f;
 
-    Mixer() : position(0.0f), radius(0.1f), speed(1.0f) {}
+    glm::vec3 velocity;
+
+    Mixer() : position(0.0f), radius(0.1f), speed(5.000f), velocity(0.0f) {}
 
     void Update(float time) {
         float t = time * speed;
         position.x = A * std::sin(a * t);
         position.z = B * std::cos(b * t);
         // Y is irrelevant for an infinite vertical rod
+        
+        // Calculate velocity (derivative of position w.r.t time)
+        // dx/dt = A * cos(at) * a * speed
+        // dz/dt = -B * sin(bt) * b * speed
+        velocity.x = A * a * std::cos(a * t) * speed;
+        velocity.z = -B * b * std::sin(b * t) * speed;
+        velocity.y = 0.0f;
     }
 };

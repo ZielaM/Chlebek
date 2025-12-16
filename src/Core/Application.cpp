@@ -2,14 +2,16 @@
 #include "Renderer/Shader.h"
 #include <stdexcept>
 #include <iostream>
+#include <string>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp> // For matrix operations
+#include <glm/gtc/type_ptr.hpp>
+
 #include <vector>
 #include <random>
-#include <iostream>
 
 Application::Application(int width, int height, const char* title) 
     : m_Width(width), m_Height(height), m_Title(title) {
@@ -68,9 +70,30 @@ void Application::Init() {
     ImGui_ImplOpenGL3_Init("#version 450");
 
     // Simulation Init
-    m_SimEngine.Init(1000); // 1000 agents
+    ResetSimulation();
 
     std::cout << "OpenGL Init OK! Version: " << glGetString(GL_VERSION) << std::endl;
+}
+
+void Application::ResetSimulation() {
+    float totalRatio = m_ProteinRatio + m_StarchRatio;
+    if (totalRatio <= 0.0f) totalRatio = 1.0f; // Prevent division by zero
+
+    int starchCount = (int)((m_StarchRatio / totalRatio) * m_TotalAgents);
+    int proteinCount = m_TotalAgents - starchCount;
+    
+    // Split Protein into Gliadin and Glutenin (50/50)
+    int gliadinCount = proteinCount / 2;
+    int gluteninCount = proteinCount - gliadinCount;
+    
+    m_SimEngine.Init(gliadinCount, gluteninCount, starchCount);
+    
+    // Clear plots on reset
+    m_PlotTime.clear();
+    m_PlotBonds.clear();
+    m_PlotBroken.clear();
+    m_PlotYoungs.clear();
+    m_LastBrokenBondsTotal = 0;
 }
 
 void Application::MainLoop() {
@@ -173,7 +196,12 @@ void Application::MainLoop() {
                 if (++plotCounter % 10 == 0) {
                     m_PlotTime.push_back(currentFrame);
                     m_PlotBonds.push_back((float)m_SimEngine.m_Springs.size());
-                    m_PlotBroken.push_back((float)m_SimEngine.m_BrokenBondsTotal);
+                    
+                    int currentBroken = m_SimEngine.m_BrokenBondsTotal;
+                    int diff = currentBroken - m_LastBrokenBondsTotal;
+                    m_LastBrokenBondsTotal = currentBroken;
+                    
+                    m_PlotBroken.push_back((float)diff);
                     m_PlotYoungs.push_back(m_SimEngine.GetYoungsModulus());
                     
                     if (m_PlotTime.size() > 1000) {
@@ -214,6 +242,7 @@ void Application::MainLoop() {
                 bondColor.reserve(springs.size() * 2 * 3);
                 
                 const float whiteColor[3] = {1.0f, 1.0f, 1.0f};
+                const float blackColor[3] = {0.0f, 0.0f, 0.0f};
                 
                 for (const auto& s : springs) {
                     // Position data
@@ -225,9 +254,12 @@ void Application::MainLoop() {
                     bondPos.push_back(s.b->position.y);
                     bondPos.push_back(s.b->position.z);
                     
-                    // Color data (white for both vertices)
-                    bondColor.insert(bondColor.end(), whiteColor, whiteColor + 3);
-                    bondColor.insert(bondColor.end(), whiteColor, whiteColor + 3);
+                    // Color data
+                    bool isStarchBond = (s.a->type == STARCH || s.b->type == STARCH);
+                    const float* col = isStarchBond ? blackColor : whiteColor;
+                    
+                    bondColor.insert(bondColor.end(), col, col + 3);
+                    bondColor.insert(bondColor.end(), col, col + 3);
                 }
                 
                 shader.SetVec3("u_Color", glm::vec3(0.6f));
@@ -432,6 +464,15 @@ void Application::RenderUI() {
     }
     
     if (ImGui::CollapsingHeader("Environment", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Text("Simulation Config");
+        ImGui::InputFloat("Protein Ratio", &m_ProteinRatio, 0.1f, 1.0f, "%.1f");
+        ImGui::InputFloat("Starch Ratio", &m_StarchRatio, 0.1f, 1.0f, "%.1f");
+        ImGui::InputInt("Total Agents", &m_TotalAgents);
+        if (ImGui::Button("Restart Simulation")) {
+            ResetSimulation();
+        }
+        ImGui::Separator();
+        
         const char* items[] = { "Zero G", "Gravity", "Central Force" };
         int currentItem = (int)m_SimEngine.m_GravityMode;
         if (ImGui::Combo("Gravity Mode", &currentItem, items, IM_ARRAYSIZE(items))) {

@@ -6,37 +6,41 @@
 #include <algorithm>
 #include <iostream>
 
-void SimulationEngine::Init(int agentCount) {
+void SimulationEngine::Init(int gliadinCount, int gluteninCount, int starchCount) {
+    int totalAgents = gliadinCount + gluteninCount + starchCount;
     m_Agents.clear();
     m_Springs.clear();
-    m_Agents.reserve(agentCount);
+    m_BrokenBondsTotal = 0;
+    m_Agents.reserve(totalAgents);
 
     std::mt19937 gen(42);
     std::uniform_real_distribution<float> distR(0.0f, m_ContainerRadius * 0.9f); // Keep slightly away from walls
     std::uniform_real_distribution<float> distTheta(0.0f, 2.0f * 3.14159f);
     std::uniform_real_distribution<float> distY(m_FloorY + 0.1f, m_FloorY + 1.0f); // Fill bottom 1.0m
-    std::uniform_real_distribution<float> distType(0.0f, 1.0f);
 
-    for (int i = 0; i < agentCount; ++i) {
+    // Create list of types to assign
+    std::vector<AgentType> types;
+    types.reserve(totalAgents);
+    for (int i = 0; i < gliadinCount; ++i) types.push_back(GLIADIN);
+    for (int i = 0; i < gluteninCount; ++i) types.push_back(GLUTENIN);
+    for (int i = 0; i < starchCount; ++i) types.push_back(STARCH);
+
+    // Shuffle types to randomize distribution
+    std::shuffle(types.begin(), types.end(), gen);
+
+    for (int i = 0; i < totalAgents; ++i) {
         float r = std::sqrt(distR(gen)); // Sqrt for uniform area distribution
         float theta = distTheta(gen);
         float y = distY(gen);
         
         glm::vec3 pos(r * cos(theta), y, r * sin(theta));
         
-        AgentType type = STARCH;
-        float t = distType(gen);
-        if (t < 0.30f) type = GLUTENIN;
-        else if (t < 0.60f) type = GLIADIN;
-        // No YEAST agents anymore
-        
-        m_Agents.emplace_back(i, pos, type);
+        m_Agents.emplace_back(i, pos, types[i]);
     }
 }
 
 void SimulationEngine::Update(float dt) {
     // 1. Biology: Yeast Effect (Spring Expansion)
-    // Instead of growing particles, we expand the network from within
     for (auto& spring : m_Springs) {
         // Expansion
         if (spring.restLength < m_MaxSpringLength) {
@@ -69,8 +73,7 @@ void SimulationEngine::Update(float dt) {
             glm::vec3 dir = center - a.position;
             a.force += dir * m_CentralForceK;
         }
-        // NONE: No external force (floating)
-        
+
         // Brownian Motion (Random Jitter)
         if (m_Temperature > 0.0f) {
             glm::vec3 jitter(distBrown(gen), distBrown(gen), distBrown(gen));
@@ -85,7 +88,6 @@ void SimulationEngine::Update(float dt) {
     }
 
     // 3. Chemistry: Dynamic Bond Creation
-    // Note: Cannot easily parallelize due to m_Springs modification
     for (auto& agent : m_Agents) {
         if (agent.type == STARCH) continue; // Only Glutenin/Gliadin form bonds
         if (agent.connectedAgentIDs.size() >= agent.maxBonds) continue;
@@ -97,8 +99,6 @@ void SimulationEngine::Update(float dt) {
             float collisionRadiusSq = m_CollisionRadius * m_CollisionRadius;
 
             // --- 1. Volume Preservation & Friction ---
-            // We check if agents are too close (inside Collision Radius).
-            // If so, we apply a Repulsion Force to simulate volume (preventing them from merging).
             if (distSq < collisionRadiusSq && distSq > 0.000001f) {
                 float dist = std::sqrt(distSq);
                 glm::vec3 dir = (agent.position - neighbor->position) / dist;
@@ -108,8 +108,6 @@ void SimulationEngine::Update(float dt) {
                 glm::vec3 repulsion = dir * overlap * m_RepulsionK;
 
                 // Friction (Coulomb Model):
-                // Resists relative motion between particles.
-                // F_friction <= mu * F_normal (where F_normal is our Repulsion)
                 glm::vec3 relVel = agent.velocity - neighbor->velocity;
                 float v_normal = glm::dot(relVel, dir);
                 glm::vec3 v_tangent = relVel - v_normal * dir;
@@ -118,32 +116,24 @@ void SimulationEngine::Update(float dt) {
                 glm::vec3 friction(0.0f);
                 if (vt_len > 0.0001f) {
                     float fn = glm::length(repulsion);
-                    // Use Static or Dynamic friction coefficient based on speed
                     float mu = (vt_len < 0.1f) ? m_StaticFriction : m_DynamicFriction;
                     glm::vec3 f_dir = -v_tangent / vt_len;
                     friction = f_dir * fn * mu;
                 }
 
-                // OPTIMIZATION: Lock-Free Update
                 agent.force += repulsion + friction;
             }
 
             // 2. Dynamic Bond Creation (Probabilistic)
-            // Only Glutenin-Gliadin or Glutenin-Glutenin form bonds
             bool canBond = (agent.type == GLUTENIN && neighbor->type == GLIADIN) ||
                 (agent.type == GLUTENIN && neighbor->type == GLUTENIN);
 
 
-            // RECALCULATE dist for bonding check (since we only calculated distSq above if close)
             float dist = glm::distance(agent.position, neighbor->position);
 
             if (canBond && dist < m_BondDistance) {
-                // Check probability (simulating time/temperature factor)
-                // Higher temp could actually BREAK bonds, but for formation we assume mixing helps. POPRAWIC
-                // Let's keep it simple: random chance if close.
                 static std::uniform_real_distribution<float> distProb(0.0f, 1.0f);
                 if (distProb(gen) < m_BondProbability) {
-                    // Check if already connected
                     bool alreadyConnected = false;
                     for (int id : agent.connectedAgentIDs) {
                         if (id == neighbor->id) { alreadyConnected = true; break; }
@@ -160,7 +150,6 @@ void SimulationEngine::Update(float dt) {
                         newSpring.springConstant = m_SpringK;
                         newSpring.breakingThreshold = m_BreakingThreshold;
 
-                        // Critical section for vector modification
 #pragma omp critical
                         {
                             m_Springs.push_back(newSpring);
@@ -190,22 +179,19 @@ void SimulationEngine::Update(float dt) {
 
                     float dist = glm::distance(starchAgent.position, neighbor->position);
                     if (dist < STARCH_BOND_DISTANCE) {
-                        if (distProb(gen) < m_BondProbability * 5.0f) {
+                        if (distProb(gen) < m_BondProbability * 2000.0f) {
                             //nowe krotkie sztywne wiazanie
                             Spring newStarchSpring;
                             newStarchSpring.a = &starchAgent;
                             newStarchSpring.b = neighbor;
 
-                            //tymi parametrami mozna sie pobawic 
-
                             newStarchSpring.restLength = STARCH_REST_LENGTH;
                             newStarchSpring.springConstant = m_SpringK * STARCH_SPRING_MULTIPLIER;
                             newStarchSpring.breakingThreshold = STARCH_REST_LENGTH + 0.5f;
 
-                            // Critical section for vector modification                            
 #pragma omp critical
 
-                            {//Nie dodajemy do connectedAgentIDs, aby nie wplywac na 'maxBonds'glutenu
+                            {
                                 m_Springs.push_back(newStarchSpring);
                                 starchAgent.isStarchBonded = true;
                             }
@@ -226,11 +212,7 @@ void SimulationEngine::Update(float dt) {
     for (int i = 0; i < m_Agents.size(); ++i) {
         auto& agent = m_Agents[i];
         
-        // Environment Forces (Gravity vs Central)
-        // Gravity Modes handled above
-        // if (m_UseCentralForce) { ... } removed
-        
-        // Mixer Collision (Infinite Cylinder)
+        // Mixer Collision 
         float dx = agent.position.x - m_Mixer.position.x;
         float dz = agent.position.z - m_Mixer.position.z;
         float distSq = dx*dx + dz*dz;
@@ -245,7 +227,13 @@ void SimulationEngine::Update(float dt) {
             glm::vec3 repulsion = dir * (m_RepulsionK * overlap);
             agent.force += repulsion;
             
-            // Friction/Drag from mixer movement could be added here
+            // Drag: Pull agent along with mixer
+            glm::vec3 relVel = agent.velocity - m_Mixer.velocity;
+            
+            float mixerDragCoeff = 10.0f; 
+            glm::vec3 dragForce = -relVel * mixerDragCoeff;
+            
+            agent.force += dragForce;
         }
         
         // Repulsion (Variable Radius)
@@ -276,7 +264,6 @@ void SimulationEngine::Update(float dt) {
         
         // Stress / Breakage
         if (currentLength > it->breakingThreshold) {
-            // Remove bond info from agents
             auto& aCon = a->connectedAgentIDs;
             auto& bCon = b->connectedAgentIDs;
             aCon.erase(std::remove(aCon.begin(), aCon.end(), b->id), aCon.end());
@@ -294,46 +281,6 @@ void SimulationEngine::Update(float dt) {
             
             a->force += force;
             b->force -= force;
-
-            /*/ --- Sticky Starch Implementation ---
-            // Starch particles (STARCH) are attracted to bonds (Line Segment AB)
-            glm::vec3 midPoint = (a->position + b->position) * 0.5f;
-            
-            // Check neighbors near the bond's center
-            m_Grid.ForEachNeighbor(midPoint, [&](Agent* neighbor) {
-                if (neighbor->type != STARCH) return;
-
-                // Point-Segment Distance
-                // Project neighbor->pos (P) onto line segment AB
-                glm::vec3 pa = neighbor->position - a->position;
-                glm::vec3 ba = b->position - a->position;
-                float h = glm::clamp(glm::dot(pa, ba) / glm::dot(ba, ba), 0.0f, 1.0f);
-                glm::vec3 closestPoint = a->position + ba * h; // P'
-                
-                glm::vec3 distVec = closestPoint - neighbor->position;
-                float distSq = glm::length2(distVec);
-
-                if (distSq < m_StickyDistance * m_StickyDistance) {
-                    float dist = std::sqrt(distSq);
-                    if (dist > 0.0001f) {
-                        glm::vec3 attractDir = distVec / dist;
-                        // Linear fallout: strong at 0, zero at StickyDistance
-                        float strength = (1.0f - dist / m_StickyDistance) * m_StickyForceK;
-                        
-                        glm::vec3 stickyForce = attractDir * strength;
-                        
-                        // Apply force to Starch
-                        neighbor->force += stickyForce;
-                        
-                        // Newton's 3rd: Apply opposite force to the bond (distributed to A and B based on projection h)
-                        // This ensures the bond "feels" the starch dragging it
-                        a->force -= stickyForce * (1.0f - h);
-                        b->force -= stickyForce * h;
-                    }
-                }
-                
-            });
-            */
         }
         ++it;
     }
@@ -345,7 +292,7 @@ void SimulationEngine::Update(float dt) {
         glm::vec3 tempPos = agent.position;
         glm::vec3 acceleration = agent.force / agent.mass;
         
-        // Verlet: pos = pos + (pos - prevPos) * damping + a * dt^2
+        // Verlet
         glm::vec3 velocity = agent.position - agent.prevPosition;
         agent.position = agent.position + velocity * m_Damping + acceleration * (dt * dt);
         agent.prevPosition = tempPos;
@@ -366,11 +313,9 @@ void SimulationEngine::Update(float dt) {
         }
 
         // --- Lid Collision (Hard Clamp) ---
-        // Prevents tunneling by strictly clamping the Y position.
-        // If an agent tries to go above the lid, we force it down and invert its velocity.
         if (agent.position.y > m_ContainerHeight - agent.radius) {
             float displacementY = agent.position.y - agent.prevPosition.y;
-            agent.position.y = m_ContainerHeight - agent.radius; // Hard constraint
+            agent.position.y = m_ContainerHeight - agent.radius;
             
             // Bounce: Invert the vertical velocity component
             agent.prevPosition.y = agent.position.y + displacementY * 0.5f;
@@ -392,28 +337,15 @@ void SimulationEngine::Update(float dt) {
             // Project back to edge
             agent.position.x = dir.x * maxDist;
             agent.position.z = dir.z * maxDist;
-            
-            // Apply friction to velocity (prevent sliding too fast)
-            // We want to kill the outward velocity component
+
             glm::vec3 velocity = agent.position - agent.prevPosition;
             glm::vec3 tangent = glm::cross(glm::vec3(0,1,0), dir);
             float tangentSpeed = glm::dot(velocity, tangent);
             
-            // Simple friction: just dampen previous position towards current
+            // Simple friction
              agent.prevPosition.x = agent.position.x - (agent.position.x - agent.prevPosition.x) * 0.5f;
              agent.prevPosition.z = agent.position.z - (agent.position.z - agent.prevPosition.z) * 0.5f;
         }
-    }
-    
-    // Debug Info (every ~60 frames assuming 0.01s step)
-    static int frameCounter = 0;
-    frameCounter++;
-    if (frameCounter % 100 == 0) {
-        // float maxY = -100.0f;
-        // for (const auto& agent : m_Agents) {
-        //     if (agent.position.y > maxY) maxY = agent.position.y;
-        // }
-        // std::cout << "Agents: " << m_Agents.size() << " | Bonds: " << m_Springs.size() << " | Max Y: " << maxY << std::endl;
     }
 }
 
