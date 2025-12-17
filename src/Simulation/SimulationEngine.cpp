@@ -37,6 +37,61 @@ void SimulationEngine::Init(int gliadinCount, int gluteninCount, int starchCount
         
         m_Agents.emplace_back(i, pos, types[i]);
     }
+
+    // --- Settling Phase: Gently separate overlapping agents ---
+    float settlingDt = 0.016f;
+    for (int step = 0; step < 60; ++step) {
+        // 1. Rebuild Grid
+        m_Grid.Clear();
+        for (auto& agent : m_Agents) {
+            m_Grid.AddAgent(&agent);
+        }
+
+        // 2. Calculate Repulsion
+        #pragma omp parallel for
+        for (int i = 0; i < m_Agents.size(); ++i) {
+            Agent& a = m_Agents[i];
+            a.force = glm::vec3(0.0f); // Zero out gravity/thermal
+
+            m_Grid.ForEachNeighbor(a.position, [&](Agent* neighbor) {
+                if (a.id == neighbor->id) return;
+
+                float distSq = glm::distance2(a.position, neighbor->position);
+                float radiusSum = m_CollisionRadius; // Push to equilibrium distance
+
+                if (distSq < radiusSum * radiusSum && distSq > 0.000001f) {
+                    float dist = std::sqrt(distSq);
+                    glm::vec3 dir = (a.position - neighbor->position) / dist;
+                    float overlap = radiusSum - dist;
+                    a.force += dir * overlap * m_RepulsionK;
+                }
+            });
+        }
+
+        // 3. Integrate & Constrain
+        #pragma omp parallel for
+        for (int i = 0; i < m_Agents.size(); ++i) {
+            Agent& a = m_Agents[i];
+            glm::vec3 acc = a.force / a.mass;
+            glm::vec3 tempPos = a.position;
+
+            // High damping (0.1f) to kill kinetic energy
+            a.position = a.position + (a.position - a.prevPosition) * 0.1f + acc * (settlingDt * settlingDt);
+            a.prevPosition = tempPos;
+
+            // Constraints
+            if (a.position.y < m_FloorY + a.radius) a.position.y = m_FloorY + a.radius;
+            if (a.position.y > m_ContainerHeight - a.radius) a.position.y = m_ContainerHeight - a.radius;
+            
+            float d2 = a.position.x * a.position.x + a.position.z * a.position.z;
+            float maxR = m_ContainerRadius - a.radius;
+            if (d2 > maxR * maxR) {
+                float d = std::sqrt(d2);
+                a.position.x = (a.position.x / d) * maxR;
+                a.position.z = (a.position.z / d) * maxR;
+            }
+        }
+    }
 }
 
 void SimulationEngine::Update(float dt) {

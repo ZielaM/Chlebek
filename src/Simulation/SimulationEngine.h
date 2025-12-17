@@ -42,7 +42,7 @@ private:
     float m_MaxSpringLength = 0.5f;     // Maximum length a spring can grow to
     
     // --- Realism ---
-    float m_Temperature = 40.0f;        // Controls Brownian motion intensity
+    float m_Temperature = 30.0f;        // Controls Brownian motion intensity
     float m_BondProbability = 0.650f;     // Probability of forming a bond per frame
     
     /*
